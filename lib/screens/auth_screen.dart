@@ -1,5 +1,7 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/src/widgets/framework.dart';
 import 'package:flutter/src/widgets/placeholder.dart';
 import '../widgets/auth_form.dart';
@@ -15,15 +17,64 @@ class AuthScreen extends StatefulWidget {
 
 class _AuthScreenState extends State<AuthScreen> {
   final _auth = FirebaseAuth.instance;
-
-  void _submitAuthForm(
-      String email, String password, String username, bool isLogin) async {
+  final db = FirebaseFirestore.instance;
+  var _isLoading = false;
+  void _submitAuthForm(String email, String password, String username,
+      bool isLogin, BuildContext ctx) async {
     UserCredential userCredential;
 
-    if (isLogin) {
-      userCredential = await _auth.signInWithEmailAndPassword(email: email, password: password);
-    } else {
-      userCredential = await _auth.createUserWithEmailAndPassword(email: email, password: password);
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+      if (isLogin) {
+        userCredential = await _auth.signInWithEmailAndPassword(
+            email: email, password: password);
+      } else {
+        userCredential = await _auth.createUserWithEmailAndPassword(
+            email: email, password: password);
+
+        db
+            .collection('users')
+            .doc(userCredential.user?.uid)
+            .set({'username': username, 'email': email});
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Se ha creado la cuenta $email correctamente!"),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } on PlatformException catch (err) {
+      // TODO
+      // TODO
+      var message = 'An error ocurred, pelase check your credentials!';
+      print("Exeption: PlatformException");
+      if (err.message != null) {
+        message = err.message!;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+      setState(() {
+        _isLoading = false;
+      });
+      print("Ha saltado la exceptción: $e");
     }
   }
 
@@ -31,7 +82,7 @@ class _AuthScreenState extends State<AuthScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.background,
-      body: AuthForm(),
+      body: AuthForm(_submitAuthForm, _isLoading),
     );
   }
 }
